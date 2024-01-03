@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SINC Mod Manager</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+</head>
+<body>
+    <div id="select-base-dir" class="container mt-4">
+        <div class="row">
+            <div class="col">
+                <h1>Select Directory</h1>
+                <h6>Choose the directory where your Software Inc. installation is located.</h6>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <button class="btn btn-primary" onclick="init()">Select</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="mod-manager" class="container mt-4 d-none">
+        <div class="row">
+            <div class="col">
+                <h1>SINC Advanced Mod Manager</h1>
+                <h6>Manage DLL mods with ease.</h6>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col">
+                <h2>Installed Mods</h2>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Author</th>
+                            <th>Description</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="mod-list">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col">
+                <h2>Install Mod</h2>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Author</th>
+                            <th>Description</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="mod-browser">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class Mod {
+            /**
+             * @param {FileSystemDirectoryHandle} dirHandle
+             */
+            constructor(dirHandle) {
+                this.dirHandle = dirHandle;
+            }
+
+            /**
+             * @returns {Promise<FileSystemDirectoryHandle>}
+             */
+            getDirHandle() {
+                return this.dirHandle;
+            }
+
+            /**
+             * @returns {Promise<string>}
+             */
+            getDirName() {
+                return this.dirHandle.name;
+            }
+
+            /**
+             * @returns {Promise<string>}
+             */
+            getMetadata() {
+                return this.getFile('meta.tyd');
+            }
+
+            /**
+             * @returns {Promise<string>}
+             */
+            async getModName() {
+                const metadata = await this.getMetadata();
+                const lines = metadata.split('\n');
+                const nameLine = lines.find(line => line.startsWith('Name'));
+                return nameLine.split('Name')[1].trim();
+            }
+
+            /**
+             * @returns {Promise<string>}
+             */
+            async getModDescription() {
+                const metadata = await this.getMetadata();
+                const lines = metadata.split('\n');
+                const descriptionLine = lines.find(line => line.startsWith('Description'));
+                return descriptionLine.split('Description')[1].trim();
+            }
+
+            /**
+             * @returns {Promise<string>}
+             */
+            async getModAuthor() {
+                const metadata = await this.getMetadata();
+                const lines = metadata.split('\n');
+                const authorLine = lines.find(line => line.startsWith('Author'));
+                return authorLine.split('Author')[1].trim();
+            }
+
+            /**
+             * @returns {Promise<string>}
+             */
+            async getFile(path) {
+                const fileHandle = await getFile(this.dirHandle, path);
+                const file = await fileHandle.getFile();
+                return await file.text();
+            }
+        }
+
+        class ModBrowserEntry {
+            /** @type {string} */
+            name;
+
+            /** @type {string} */
+            author;
+
+            /** @type {string} */
+            description;
+
+            /** @type {string} */
+            fileRoot;
+
+            /** @type {string[]} */
+            files;
+        }
+
+        /** @type {FileSystemDirectoryHandle} */
+        let baseDirHandle = null;
+
+        /** @type {FileSystemDirectoryHandle} */
+        let dllModsHandle = null;
+
+        /** @type {Mod[]} */
+        const mods = [];
+
+        /** @type {ModBrowserEntry[]} */
+        let modBrowserEntries = [];
+
+        async function init() {
+            baseDirHandle = await window.showDirectoryPicker();
+            document.getElementById('select-base-dir').classList.add('d-none');
+            document.getElementById('mod-manager').classList.remove('d-none');
+
+            dllModsHandle = await getDirectory(baseDirHandle, 'DLLMods');
+            loadModList();
+        }
+
+        async function getDirectory(dirHandle, path) {
+            try {
+                return await dirHandle.getDirectoryHandle(path);
+            } catch (e) {
+                throw new Error(`Directory ${path} not found`);
+            }
+        }
+
+        async function getFile(dirHandle, path) {
+            try {
+                return await dirHandle.getFileHandle(path);
+            } catch (e) {
+                throw new Error(`File ${path} not found`);
+            }
+        }
+
+        async function loadModList() {
+            try {
+                const modList = await getDirectory(baseDirHandle, 'DLLMods');
+                const modListEntries = await modList.values();
+
+                for await (const modEntry of modListEntries) {
+                    if (modEntry.kind !== 'directory') {
+                        continue;
+                    }
+
+                    const mod = await getDirectory(modList, modEntry.name);
+
+                    mods.push(new Mod(mod));
+                    console.log("Added mod", await mods[mods.length - 1].getModName() + " by " + await mods[mods.length - 1].getModAuthor());
+                }
+
+                showModList();
+                loadModBrowser();
+            } catch (e) {
+                console.error(e);
+                alert("Error loading mods! Did you select the correct directory?");
+                document.getElementById('select-base-dir').classList.remove('d-none');
+                document.getElementById('mod-manager').classList.add('d-none');
+
+            }
+        }
+
+        async function showModList() {
+            const modList = document.getElementById('mod-list');
+
+            modList.innerHTML = '';
+
+            for (const mod of mods) {
+                const modName = await mod.getModName();
+                const modAuthor = await mod.getModAuthor();
+                const modDescription = await mod.getModDescription();
+
+                const row = document.createElement('tr');
+                const nameCell = document.createElement('td');
+                const authorCell = document.createElement('td');
+                const descriptionCell = document.createElement('td');
+                const actionsCell = document.createElement('td');
+
+                nameCell.innerText = modName;
+                authorCell.innerText = modAuthor;
+                descriptionCell.innerText = modDescription;
+
+                const deleteButton = document.createElement('button');
+                deleteButton.classList.add('btn', 'btn-danger');
+                deleteButton.innerText = 'Delete';
+                deleteButton.addEventListener('click', async () => {
+                    await dllModsHandle.removeEntry(mod.getDirName(), { recursive: true });
+                    mods.splice(mods.indexOf(mod), 1);
+                    showModList();
+                });
+
+                actionsCell.appendChild(deleteButton);
+
+                row.appendChild(nameCell);
+                row.appendChild(authorCell);
+                row.appendChild(descriptionCell);
+                row.appendChild(actionsCell);
+
+                modList.appendChild(row);
+            }
+        }
+
+        async function loadModBrowser() {
+            const workshopRequest = await fetch('mods.json');
+            const workshopMods = await workshopRequest.json();
+
+            modBrowserEntries = workshopMods;
+
+            showModBrowser();
+        }
+
+        async function showModBrowser() {
+            const modBrowser = document.getElementById('mod-browser');
+
+            modBrowser.innerHTML = '';
+
+            for (const mod of modBrowserEntries) {
+                const row = document.createElement('tr');
+                const nameCell = document.createElement('td');
+                const authorCell = document.createElement('td');
+                const descriptionCell = document.createElement('td');
+                const actionsCell = document.createElement('td');
+
+                nameCell.innerText = mod.name;
+                authorCell.innerText = mod.author;
+                descriptionCell.innerText = mod.description;
+
+                const installButton = document.createElement('button');
+                installButton.classList.add('btn', 'btn-success');
+                installButton.innerText = 'Install';
+                installButton.addEventListener('click', async () => {
+                    const modDir = await dllModsHandle.getDirectoryHandle(mod.name, { create: true });
+                    const modFiles = await modDir.values();
+
+                    for await (const modFile of modFiles) {
+                        await modDir.removeEntry(modFile.name);
+                    }
+
+                    for (const file of mod.files) {
+                        const fileHandle = await modDir.getFileHandle(file, { create: true });
+                        const fileContents = await fetch(mod.fileRoot + file);
+                        const fileBlob = await fileContents.blob();
+
+                        let writable = await fileHandle.createWritable();
+                        await writable.write(fileBlob);
+                        await writable.close();
+                    }
+
+                    mods.length = 0;
+                    loadModList();
+                });
+
+                actionsCell.appendChild(installButton);
+
+                row.appendChild(nameCell);
+                row.appendChild(authorCell);
+                row.appendChild(descriptionCell);
+                row.appendChild(actionsCell);
+
+                modBrowser.appendChild(row);
+            }
+        }
+    </script>
+</body>
+</html>

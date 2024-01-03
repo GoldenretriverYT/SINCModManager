@@ -1,0 +1,12 @@
+[
+    {
+        "name": "Test Mod",
+        "description": "This is a test mod",
+        "author": "Test Author",
+        "fileRoot": "mods/testmod/",
+        "files": [
+            "testmod.dll",
+            "meta.tyd"
+        ]
+    }
+]
