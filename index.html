@@ -153,6 +153,9 @@
 
             /** @type {string[]} */
             files;
+
+            /** @type {string[]} */
+            dependencies;
         }
 
         /** @type {FileSystemDirectoryHandle} */
@@ -288,25 +291,7 @@
                 installButton.classList.add('btn', 'btn-success');
                 installButton.innerText = 'Install';
                 installButton.addEventListener('click', async () => {
-                    const modDir = await dllModsHandle.getDirectoryHandle(mod.name, { create: true });
-                    const modFiles = await modDir.values();
-
-                    for await (const modFile of modFiles) {
-                        await modDir.removeEntry(modFile.name);
-                    }
-
-                    for (const file of mod.files) {
-                        const fileHandle = await modDir.getFileHandle(file, { create: true });
-                        const fileContents = await fetch(mod.fileRoot + file);
-                        const fileBlob = await fileContents.blob();
-
-                        let writable = await fileHandle.createWritable();
-                        await writable.write(fileBlob);
-                        await writable.close();
-                    }
-
-                    mods.length = 0;
-                    loadModList();
+                    installMod(mod);
                 });
 
                 actionsCell.appendChild(installButton);
@@ -318,6 +303,38 @@
 
                 modBrowser.appendChild(row);
             }
+        }
+
+        /**
+         * @param {ModBrowserEntry} mod
+         * */
+        async function installMod(mod) {
+            const modDir = await dllModsHandle.getDirectoryHandle(mod.name, { create: true });
+            const modFiles = await modDir.values();
+
+            for await (const modFile of modFiles) {
+                await modDir.removeEntry(modFile.name);
+            }
+
+            for (const file of mod.files) {
+                const fileHandle = await modDir.getFileHandle(file, { create: true });
+                const fileContents = await fetch(mod.fileRoot + file);
+                const fileBlob = await fileContents.blob();
+
+                let writable = await fileHandle.createWritable();
+                await writable.write(fileBlob);
+                await writable.close();
+            }
+
+            for (const dependency of mod.dependencies) {
+                const dependencyMod = modBrowserEntries.find(mod => mod.name === dependency);
+                if (dependencyMod) {
+                    await installMod(dependencyMod);
+                }
+            }
+
+            mods.length = 0;
+            loadModList();
         }
     </script>
 </body>

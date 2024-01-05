@@ -1,12 +1,27 @@
 [
     {
-        "name": "Test Mod",
-        "description": "This is a test mod",
-        "author": "Test Author",
-        "fileRoot": "mods/testmod/",
+        "name": "Harmony for SINC",
+        "description": "Harmony for Software Inc.",
+        "author": "GoldenretriverYT",
+        "fileRoot": "mods/harmonysinc/",
         "files": [
-            "testmod.dll",
+            "HarmonyForSINC.dll",
+            "meta.tyd",
+            "harmony/0Harmony.dll",
+            "harmony/0Harmony.xml"
+        ]
+    },
+    {
+        "name": "ShowModCompatErrors",
+        "description": "Is 'This mod is not compatible' message simply not enough for you? This mod will show you the exact reason why the mod is not compatible, as determined by the game.",
+        "author": "GoldenretriverYT",
+        "fileRoot": "mods/showmodcompaterrors/",
+        "files": [
+            "ShowModCompatErrors.dll",
             "meta.tyd"
+        ],
+        "dependencies": [
+            "Harmony for SINC"
         ]
     }
 ]
