@@ -68,8 +68,11 @@
         </div>
     </div>
 
-    <script>
+    <script type="module">
+        import { showDirectoryPicker } from 'https://cdn.jsdelivr.net/npm/file-system-access/lib/es2018.js';
+        
         class Mod {
+
             /**
              * @param {FileSystemDirectoryHandle} dirHandle
              */
@@ -171,7 +174,7 @@
         let modBrowserEntries = [];
 
         async function init() {
-            baseDirHandle = await window.showDirectoryPicker();
+            baseDirHandle = await showDirectoryPicker();
             document.getElementById('select-base-dir').classList.add('d-none');
             document.getElementById('mod-manager').classList.remove('d-none');
 
@@ -398,6 +401,9 @@
 
             return await getFile(directoryHandle, fileName, create);
         }
+
+        // expose init
+        window.init = init;
     </script>
 </body>
 </html>
