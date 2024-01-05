@@ -165,7 +165,7 @@
         let dllModsHandle = null;
 
         /** @type {Mod[]} */
-        const mods = [];
+        let mods = [];
 
         /** @type {ModBrowserEntry[]} */
         let modBrowserEntries = [];
@@ -177,25 +177,33 @@
 
             dllModsHandle = await getDirectory(baseDirHandle, 'DLLMods');
             loadModList();
+            loadModBrowser();
         }
 
-        async function getDirectory(dirHandle, path) {
+        async function getDirectory(dirHandle, path, create = false) {
             try {
-                return await dirHandle.getDirectoryHandle(path);
+                return await dirHandle.getDirectoryHandle(path, { create });
             } catch (e) {
                 throw new Error(`Directory ${path} not found`);
             }
         }
 
-        async function getFile(dirHandle, path) {
+        async function getFile(dirHandle, path, create = false) {
             try {
-                return await dirHandle.getFileHandle(path);
+                return await dirHandle.getFileHandle(path, { create });
             } catch (e) {
                 throw new Error(`File ${path} not found`);
             }
         }
 
+        async function reloadLists() {
+            await loadModList();
+            await showModBrowser();
+        }
+
         async function loadModList() {
+            mods = [];
+
             try {
                 const modList = await getDirectory(baseDirHandle, 'DLLMods');
                 const modListEntries = await modList.values();
@@ -212,13 +220,11 @@
                 }
 
                 showModList();
-                loadModBrowser();
             } catch (e) {
                 console.error(e);
                 alert("Error loading mods! Did you select the correct directory?");
                 document.getElementById('select-base-dir').classList.remove('d-none');
                 document.getElementById('mod-manager').classList.add('d-none');
-
             }
         }
 
@@ -248,7 +254,7 @@
                 deleteButton.addEventListener('click', async () => {
                     await dllModsHandle.removeEntry(mod.getDirName(), { recursive: true });
                     mods.splice(mods.indexOf(mod), 1);
-                    showModList();
+                    await reloadLists();
                 });
 
                 actionsCell.appendChild(deleteButton);
@@ -271,6 +277,21 @@
             showModBrowser();
         }
 
+        async function isModInstalled(name) {
+            let found = false;
+
+            for (const mod of mods) {
+                if (await mod.getModName() === name) {
+                    found = true;
+                    break;
+                }
+            }
+
+            console.log("Mod", name, "is", found ? "installed" : "not installed");
+
+            return found;
+        }
+
         async function showModBrowser() {
             const modBrowser = document.getElementById('mod-browser');
 
@@ -287,14 +308,18 @@
                 authorCell.innerText = mod.author;
                 descriptionCell.innerText = mod.description;
 
-                const installButton = document.createElement('button');
-                installButton.classList.add('btn', 'btn-success');
-                installButton.innerText = 'Install';
-                installButton.addEventListener('click', async () => {
-                    installMod(mod);
-                });
+                if(await isModInstalled(mod.name)) {
+                    actionsCell.innerText = 'Installed';
+                } else {
+                    const installButton = document.createElement('button');
+                    installButton.classList.add('btn', 'btn-success');
+                    installButton.innerText = 'Install';
+                    installButton.addEventListener('click', async () => {
+                        installMod(mod);
+                    });
 
-                actionsCell.appendChild(installButton);
+                    actionsCell.appendChild(installButton);
+                }
 
                 row.appendChild(nameCell);
                 row.appendChild(authorCell);
@@ -308,7 +333,9 @@
         /**
          * @param {ModBrowserEntry} mod
          * */
-        async function installMod(mod) {
+        async function installMod(mod, isDependency = false) {
+            console.log("Installing mod", mod.name, (isDependency ? "as dependency" : ""));
+
             const modDir = await dllModsHandle.getDirectoryHandle(mod.name, { create: true });
             const modFiles = await modDir.values();
 
@@ -317,7 +344,7 @@
             }
 
             for (const file of mod.files) {
-                const fileHandle = await modDir.getFileHandle(file, { create: true });
+                const fileHandle = await findRecursiveFileHandle(modDir, file, true);
                 const fileContents = await fetch(mod.fileRoot + file);
                 const fileBlob = await fileContents.blob();
 
@@ -326,15 +353,50 @@
                 await writable.close();
             }
 
-            for (const dependency of mod.dependencies) {
-                const dependencyMod = modBrowserEntries.find(mod => mod.name === dependency);
-                if (dependencyMod) {
-                    await installMod(dependencyMod);
+            if(mod.dependencies) {
+                for (const dependency of mod.dependencies) {
+                    if (mods.find(mod => mod.getDirName() === dependency)) {
+                        continue; // Dependency already installed
+                    }
+
+                    const dependencyMod = modBrowserEntries.find(mod => mod.name === dependency);
+                    if (dependencyMod) {
+                        await installMod(dependencyMod, true);
+                    }
                 }
             }
 
-            mods.length = 0;
-            loadModList();
+            if(!isDependency) {
+                await reloadLists();
+            }
+        }
+
+        /**
+         * Gets a directory handle for a path recursively, allow e/a/b/c to be resolved without manually creating each directory
+         */
+        async function findRecursiveDirectoryHandle(rootHandle, path, create = false) {
+            const pathParts = path.split('/');
+            let currentHandle = rootHandle;
+
+            for (const pathPart of pathParts) {
+                currentHandle = await getDirectory(currentHandle, pathPart, create);
+            }
+
+            return currentHandle;
+        }
+
+        /**
+         * Gets a file handle for a path recursively, allow e/a/b/c.dll to be resolved without manually creating each directory
+         */
+        async function findRecursiveFileHandle(rootHandle, path, create = false) {
+            if(!path.includes('/')) return await getFile(rootHandle, path, create);
+
+            const pathParts = path.split('/');
+            const fileName = pathParts.pop();
+            const directoryPath = pathParts.join('/');
+            const directoryHandle = await findRecursiveDirectoryHandle(rootHandle, directoryPath, create);
+
+            return await getFile(directoryHandle, fileName, create);
         }
     </script>
 </body>

@@ -1,7 +1,7 @@
 [
     {
-        "name": "Harmony for SINC",
-        "description": "Harmony for Software Inc.",
+        "name": "HarmonyForSINC",
+        "description": "Harmony for Software Inc. Dependency for other mods.",
         "author": "GoldenretriverYT",
         "fileRoot": "mods/harmonysinc/",
         "files": [
@@ -17,11 +17,11 @@
         "author": "GoldenretriverYT",
         "fileRoot": "mods/showmodcompaterrors/",
         "files": [
-            "ShowModCompatErrors.dll",
+            "ShowModCompatErrorsNF.dll",
             "meta.tyd"
         ],
         "dependencies": [
-            "Harmony for SINC"
+            "HarmonyForSINC"
         ]
     }
 ]
